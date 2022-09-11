@@ -7,21 +7,25 @@ import (
 	"time"
 )
 
+// Monitor represents a mrmoty monitor
 type Monitor struct {
-	interval  time.Duration
-	done      chan os.Signal
-	sys OSMonitor
+	interval time.Duration
+	done     chan os.Signal
+	sys      OSMonitor
 }
 
+// NewMonitor creates a new monitor instance
 func NewMonitor(t int, done chan os.Signal, sys OSMonitor) *Monitor {
 	return &Monitor{
-		interval:  time.Duration(t) * time.Second,
-		done:      done,
-		sys: sys,
+		interval: time.Duration(t) * time.Second,
+		done:     done,
+		sys:      sys,
 	}
 }
 
-func (m *Monitor) Memory() {
+
+// Memory is responsable to monitor memory usage and send signal 
+func (m *Monitor) Memory(threshold float64) {
 	for {
 		<-time.After(m.interval)
 		memory, err := m.sys.GetUsedPercentage()
@@ -35,7 +39,7 @@ func (m *Monitor) Memory() {
 		}
 
 		fmt.Println(*memory)
-		if *memory > 90 {
+		if *memory > threshold {
 			m.done <- syscall.SIGTERM
 		}
 	}

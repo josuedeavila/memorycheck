@@ -23,7 +23,7 @@ func main() {
 
 	sys := memory.Linux{}
 	monitor := memory.NewMonitor(2, done, sys)
-	go monitor.Memory()
+	go monitor.Memory(95)
 	s := []string{}
 	go func() {
 		for {
