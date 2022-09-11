@@ -15,10 +15,14 @@ type Stats struct {
 	MemAvailableEnabled                           bool
 }
 
+
+// Linux represents linux as a entity on Monitor context
 type Linux struct {
 	stats Stats
 }
 
+
+// GetUsedPercentage return the percentage of memory used on OS
 func (l Linux) GetUsedPercentage() (*float64, error) {
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
@@ -26,7 +30,7 @@ func (l Linux) GetUsedPercentage() (*float64, error) {
 	}
 	defer file.Close()
 
-	stats, err := getMemoryStats(file)
+	stats, err := l.getMemoryStats(file)
 	if err != nil {
 		return nil, err
 	}
@@ -36,14 +40,13 @@ func (l Linux) GetUsedPercentage() (*float64, error) {
 }
 
 
-func getMemoryStats(out io.Reader) (*Stats, error) {
-	var memory Stats
+func (l Linux)getMemoryStats(out io.Reader) (*Stats, error) {
 	memStats := map[string]*uint64{
-		"MemTotal":     &memory.Total,
-		"MemFree":      &memory.Free,
-		"MemAvailable": &memory.Available,
-		"Buffers":      &memory.Buffers,
-		"Cached":       &memory.Cached,
+		"MemTotal":     &l.stats.Total,
+		"MemFree":      &l.stats.Free,
+		"MemAvailable": &l.stats.Available,
+		"Buffers":      &l.stats.Buffers,
+		"Cached":       &l.stats.Cached,
 	}
 
 	scanner := bufio.NewScanner(out)
@@ -62,7 +65,7 @@ func getMemoryStats(out io.Reader) (*Stats, error) {
 			*memStats[statKey] = v * 1024
 		}
 		if statKey == "MemAvailable" {
-			memory.MemAvailableEnabled = true
+			l.stats.MemAvailableEnabled = true
 		}
 	}
 
@@ -71,11 +74,11 @@ func getMemoryStats(out io.Reader) (*Stats, error) {
 		return nil, fmt.Errorf("scan error for /proc/meminfo: %s", err)
 	}
 
-	if memory.MemAvailableEnabled {
-		memory.Used = memory.Total - memory.Available
-	} else {
-		memory.Used = memory.Total - memory.Free - memory.Buffers - memory.Cached
+	if l.stats.MemAvailableEnabled {
+		l.stats.Used = l.stats.Total - l.stats.Available
+		return &l.stats, nil
 	}
-
-	return &memory, nil
+	
+	l.stats.Used = l.stats.Total - l.stats.Free - l.stats.Buffers - l.stats.Cached
+	return &l.stats, nil
 }
