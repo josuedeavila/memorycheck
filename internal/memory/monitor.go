@@ -24,7 +24,9 @@ func NewMonitor(t int, done chan os.Signal, sys OSMonitor) *Monitor {
 }
 
 
-// Memory is responsable to monitor memory usage and send signal 
+// Memory is responsable to monitor memory usage and send signal.
+//
+// Threshold param represents percentage number that will trigger SIGTERM if exceeded.
 func (m *Monitor) Memory(threshold float64) {
 	for {
 		<-time.After(m.interval)
