@@ -1,84 +1,91 @@
 package memory
 
 import (
-	"bufio"
-	"fmt"
-	"io"
-	"os"
-	"strconv"
+	"encoding/json"
 	"strings"
 )
 
-// Stats represents memory statistics for linux
-type Stats struct {
-	Total, Used, Buffers, Cached, Free, Available uint64
-	MemAvailableEnabled                           bool
+type MemoryStat struct {
+	Total        uint64  `json:"MemTotal"`
+	Available    uint64  `json:"MemAvailable"`
+	Used         uint64  `json:"Used"`
+	UsedPercent  float64 `json:"UsedPercent"`
+	Free         uint64  `json:"MemFree"`
+	Buffers      uint64  `json:"Buffers"`
+	Cached       uint64  `json:"Cached"`
+	Sreclaimable uint64  `json:"Sreclaimable"`
 }
-
 
 // Linux represents linux as a entity on Monitor context
 type Linux struct {
-	stats Stats
+	memoryStats MemoryStat
 }
-
 
 // GetUsedPercentage return the percentage of memory used on OS
 func (l Linux) GetUsedPercentage() (*float64, error) {
-	file, err := os.Open("/proc/meminfo")
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	stats, err := l.getMemoryStats(file)
+	stats, err := l.getMemoryStats()
 	if err != nil {
 		return nil, err
 	}
 
-	c := float64(stats.Used) / float64(stats.Total) * 100
-	return &c, nil
+	return &stats.UsedPercent, nil
 }
 
+func (l Linux) getMemoryStats() (*MemoryStat, error) {
+	filename := HostProc("meminfo")
+	lines, _ := ReadLines(filename)
 
-func (l Linux)getMemoryStats(out io.Reader) (*Stats, error) {
-	memStats := map[string]*uint64{
-		"MemTotal":     &l.stats.Total,
-		"MemFree":      &l.stats.Free,
-		"MemAvailable": &l.stats.Available,
-		"Buffers":      &l.stats.Buffers,
-		"Cached":       &l.stats.Cached,
+	memavailable := false
+	m := map[string]*uint64{
+		"MemTotal":     nil,
+		"MemAvailable": nil,
+		"Used":         nil,
+		"UsedPercent":  nil,
+		"MemFree":      nil,
+		"Buffers":      nil,
+		"Cached":       nil,
+		"SReclaimable": nil,
 	}
-
-	scanner := bufio.NewScanner(out)
-	for scanner.Scan() {
-		line := scanner.Text()
-		i := strings.IndexRune(line, ':')
-		if i < 0 {
+	for _, line := range lines {
+		fields := strings.Split(line, ":")
+		if len(fields) != 2 {
 			continue
 		}
-		statKey := line[:i]
-		if statValue := memStats[statKey]; statValue == nil {
+		key := strings.TrimSpace(fields[0])
+		value := strings.TrimSpace(fields[1])
+		value = strings.Replace(value, " kB", "", -1)
+
+		if _, ok := m[key]; !ok {
 			continue
 		}
-		v := strings.TrimSpace(strings.TrimRight(line[i+1:], "kB"))
-		if v, err := strconv.ParseUint(v, 10, 64); err == nil {
-			*memStats[statKey] = v * 1024
+
+		if key == "MemAvailable" {
+			memavailable = true
 		}
-		if statKey == "MemAvailable" {
-			l.stats.MemAvailableEnabled = true
+
+		stat, err := ParseMemStats(value)
+		if err != nil {
+			return nil, err
 		}
+		m[key] = stat
 	}
 
-	err := scanner.Err()
+	b, err := json.Marshal(m)
 	if err != nil {
-		return nil, fmt.Errorf("scan error for /proc/meminfo: %s", err)
+		return nil, err
+	}
+	if err = json.Unmarshal(b, &l.memoryStats); err != nil {
+		return nil, err
 	}
 
-	if l.stats.MemAvailableEnabled {
-		l.stats.Used = l.stats.Total - l.stats.Available
-		return &l.stats, nil
+	l.memoryStats.Cached += l.memoryStats.Sreclaimable
+	l.memoryStats.Used = l.memoryStats.Total - l.memoryStats.Free - l.memoryStats.Buffers - l.memoryStats.Cached
+	l.memoryStats.UsedPercent = float64(l.memoryStats.Used) / float64(l.memoryStats.Total) * 100.0
+
+	if !memavailable {
+		l.memoryStats.Available = l.memoryStats.Cached + l.memoryStats.Free
+		return &l.memoryStats, nil
 	}
-	
-	l.stats.Used = l.stats.Total - l.stats.Free - l.stats.Buffers - l.stats.Cached
-	return &l.stats, nil
+
+	return &l.memoryStats, nil
 }

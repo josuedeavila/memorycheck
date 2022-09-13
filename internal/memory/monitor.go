@@ -15,14 +15,13 @@ type Monitor struct {
 }
 
 // NewMonitor creates a new monitor instance
-func NewMonitor(t int, done chan os.Signal, sys OSMonitor) *Monitor {
+func NewMonitor(t float32, done chan os.Signal, sys OSMonitor) *Monitor {
 	return &Monitor{
 		interval: time.Duration(t) * time.Second,
 		done:     done,
 		sys:      sys,
 	}
 }
-
 
 // Memory is responsable to monitor memory usage and send signal.
 //

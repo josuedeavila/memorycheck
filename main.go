@@ -22,8 +22,8 @@ func main() {
 	defer panicRecover()
 
 	sys := memory.Linux{}
-	monitor := memory.NewMonitor(2, done, sys)
-	go monitor.Memory(95)
+	monitor := memory.NewMonitor(0.5, done, sys)
+	go monitor.Memory(86)
 	s := []string{}
 	go func() {
 		for {
